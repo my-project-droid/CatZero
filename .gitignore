@@ -1,0 +1,14 @@
+# Arduino IDE temporary files
+applet/
+build/
+bin/
+*.elf
+*.hex
+*.d
+*.o
+
+# VS Code and PlatformIO junk
+.pio/
+.vscode/
+.clang_complete
+.gcc-flags.json
