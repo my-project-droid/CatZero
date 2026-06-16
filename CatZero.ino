@@ -2,7 +2,7 @@
 #include <U8g2lib.h>
 #include <OneButton.h>
 
-// 1. HARDWARE CONFIGURATION
+// 1. HARDWARE PINS
 #define BUTTON_PIN 13
 #define SCREEN_SDA 21
 #define SCREEN_SCL 22
@@ -10,68 +10,145 @@
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset= */ U8X8_PIN_NONE, SCREEN_SCL, SCREEN_SDA);
 OneButton button(BUTTON_PIN, true);
 
-// 2. STATE MACHINE
-enum OperatingMode { BOOT_SCREEN, LOGO_CYCLE, MENU_DISPLAY, ACTION_RUNNING, BRUCEGOTCHI_VIEW, PROTOPIRATE_VIEW };
+// 2. ADVANCED PROGRESSION ENGINE (9 Ranks)
+struct ProgressionSystem {
+  int level = 1;
+  int xp = 0;
+  int nextLevelXp = 100;
+  int rankIndex = 0;
+  unsigned long sessionStartTime = 0;
+  
+  const char* rankNames[9] = {
+    "Kitten", "Scout", "Sniffer", "Prowler", 
+    "Phreaker", "Operator", "Ghost", "Specter", "Nyan-Lord"
+  };
+};
+ProgressionSystem catOS;
+
+// 3. STATE MACHINE EXTENSIONS
+enum OperatingMode { BOOT_SCREEN, LOGO_CYCLE, MENU_DISPLAY, ACTION_RUNNING, BRUCEGOTCHI_VIEW, PROTOPIRATE_VIEW, ANALYZER_VIEW, LOCATE_VIEW };
 OperatingMode currentMode = BOOT_SCREEN;
 
 enum ProtocolCategory { WIFI, BLUETOOTH, SUB_GHZ, INFRARED, EXTRAS };
 ProtocolCategory activeProtocol = WIFI;
 
-// Menu variables
 int currentMenuLine = 0;
 int maxMenuLines = 0;
 bool insideSubMenu = false;
 int currentSubMenuLevel = 0;
 
-// 3. BRUCEGOTCHI GAME ENGINE STATE
-struct CatPet {
-  int level = 1;
-  int xp = 0;
-  int nextLevelXp = 100;
-  int hunger = 50; // 0 to 100
-  int happiness = 50;
-  String mood = "Happy";
+// 4. THE COMPREHENSIVE TACTICAL MENU ARRAYS
+const char* wifiMenu[] = { 
+  "[ BACK ]", "Channel Analyzer", "Camera Detector", "Camera Deauther", 
+  "Pineapple Detector", "Pwnagotchi Detector", "Pwnagotchi Spam", 
+  "Drone Detector", "Flock Detector", "Device Scout", "LAP Sniffing", "Kismet" 
 };
-CatPet myCat;
 
-// 4. PROTOPIRATE DETECTOR STATE
-const char* carBrands[] = { "Kia", "Chrysler", "Jeep", "StarLine", "Scher-Khan", "Subaru", "Fiat", "Ford", "Suzuki", "Toyota" };
-int selectedBrandIndex = 0;
-float selectedRfFreq = 433.92;
-bool isSniffingCar = false;
+const char* bleMenu[] = { 
+  "[ BACK ]", "BLE Inspector", "nyanBOX Detector", "Flipper Scanner", 
+  "Axon Detector", "Meshtastic Detector", "MeshCore Detector", "Skimmer Detector", 
+  "AirTag Detector", "AirTag Spoofer", "SmartTag Detector", "Tile Detector", 
+  "RayBan Detector", "iBeacon Detector", "BLE Spammer", "Swift Pair", 
+  "Sour Apple", "Sour Droid", "BLE Spoofer" 
+};
 
-// 5. MENU ARRAYS
-const char* wifiMenu[] = { "[ BACK ]", "Connect WiFi", "WiFi AP", "WiFi Atks", "Target Atks", "Karma Attack", "Beacon Spam", "Deauth Flood", "Evil Portal" };
-const char* bleMenu[] = { "[ BACK ]", "Disconnect BLE", "Media Commands", "BLE Scan", "BadBLE", "BLE Spam Features", "Windows Spam", "Android Spam", "Samsung Spam", "Spam All", "Custom Spam", "iBeacon", "BLE Suite" };
-const char* rfMenu[] = { "[ BACK ]", "Scan/Copy", "Record Raw", "Custom SubGhz", "Spectrum", "RSSI Spectrum", "Listen", "Bruceforce", "Jammer Intermittent", "Jammer Full", "RF Brute Force", "ProtoPirate", "Config" };
-const char* irMenu[] = { "[ BACK ]", "TV-B-Gone", "Custom IR", "IR Read/replay", "IR Jammer", "IR Brute Force", "IR2Keyboard" };
-const char* extrasMenu[] = { "[ BACK ]", "Timer", "Games", "Clock", "Calculator" };
-const char* gamesSubMenu[] = { "[ BACK ]", "Snake", "Tetris", "Racing", "Magic 8 Ball", "Space Shooter", "Dino", "Tamagotchi Cat" };
+const char* rfMenu[] = { 
+  "[ BACK ]", "Scan/Copy", "Record Raw", "Custom SubGhz", "Spectrum", 
+  "RSSI Spectrum", "RollJam Attack", "Signal Lock", "Listen", 
+  "Bruceforce", "Jammer Intermittent", "Jammer Full", "RF Brute Force", "ProtoPirate" 
+};
+
+const char* irMenu[] = { 
+  "[ BACK ]", "TV-B-Gone", "Custom IR", "IR Read/replay", "IR Jammer", "IR Brute Force", "IR2Keyboard" 
+};
+
+const char* extrasMenu[] = { 
+  "[ BACK ]", "Device Networking", "Brucegotchi", "Timer", "Games", "Clock", "Calculator" 
+};
 
 const char** activeMenuSource;
 unsigned long bootTimer = 0;
 
-// 6. VISUAL RENDERING ASSETS
+// Target tracking variables for locator tools
+String targetItemName = "";
+int targetRssiSignal = -75;
+
+// 5. XP & PROGRESSION TRACKING CONTROLLER
+void awardXP(int amount, String sourceActivity) {
+  catOS.xp += amount;
+  
+  // Handle Level Up Logic up to Level 99
+  if (catOS.xp >= catOS.nextLevelXp && catOS.level < 99) {
+    catOS.level++;
+    catOS.xp = 0;
+    catOS.nextLevelXp = catOS.level * 120; // Escalating difficulty curve
+    
+    // Progress through the 9 specialized ranks based on milestone milestones
+    if (catOS.level >= 90) catOS.rankIndex = 8;
+    else if (catOS.level >= 75) catOS.rankIndex = 7;
+    else if (catOS.level >= 60) catOS.rankIndex = 6;
+    else if (catOS.level >= 45) catOS.rankIndex = 5;
+    else if (catOS.level >= 30) catOS.rankIndex = 4;
+    else if (catOS.level >= 20) catOS.rankIndex = 3;
+    else if (catOS.level >= 10) catOS.rankIndex = 2;
+    else if (catOS.level >= 5)  catOS.rankIndex = 1;
+    else catOS.rankIndex = 0;
+    
+    // Place your Preferences.h EEPROM persistence save calls here!
+  }
+}
+
+// 6. SPECIALIZED VIEW DRAWING FUNCTIONS
+void drawChannelAnalyzer() {
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_profont10_mf);
+  u8g2.drawStr(0, 10, "CH ANALYZER (WiFi)");
+  
+  // Draw simulated real-time bar charts for channels 1 through 13
+  for (int i = 0; i < 13; i++) {
+    int x = 4 + (i * 9);
+    int barHeight = random(5, 45); // Will be tied to real Wi-Fi scan results later
+    u8g2.drawBox(x, 55 - barHeight, 6, barHeight);
+    
+    // Draw numbers for key channels
+    if (i == 0 || i == 5 || i == 10) {
+      u8g2.setCursor(x, 64);
+      u8g2.print(String(i+1));
+    }
+  }
+  u8g2.sendBuffer();
+}
+
+void drawSignalLocatingRadar() {
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_profont12_mf);
+  u8g2.drawStr(0, 12, "🎯 LOCATE MODE");
+  u8g2.setFont(u8g2_font_profont10_mf);
+  u8g2.drawStr(0, 26, targetItemName.c_str());
+  
+  // Fluctuating RSSI signal simulation
+  targetRssiSignal = targetRssiSignal + random(-3, 4);
+  if (targetRssiSignal > -30) targetRssiSignal = -30;
+  if (targetRssiSignal < -95) targetRssiSignal = -95;
+  
+  u8g2.setCursor(0, 42);
+  u8g2.print("RSSI: " + String(targetRssiSignal) + " dBm");
+  
+  // Graphical signal progress bar
+  int fillWidth = map(targetRssiSignal, -95, -30, 0, 124);
+  u8g2.drawFrame(0, 46, 128, 8);
+  u8g2.drawBox(2, 48, fillWidth, 4);
+  
+  u8g2.drawStr(0, 62, "[Click to Stop Sniffing]");
+  u8g2.sendBuffer();
+}
+
 void drawCatFace(int x, int y, String emotion) {
-  // Ears
   u8g2.drawTriangle(x, y+10, x+8, y, x+12, y+10);     
   u8g2.drawTriangle(x+24, y+10, x+28, y, x+36, y+10); 
-  u8g2.drawFrame(x+4, y+10, 28, 16); // Face
-  
-  if (emotion == "Anxious") {
-    // Slanted nervous eyes
-    u8g2.drawLine(x+8, y+14, x+11, y+16);
-    u8g2.drawLine(x+27, y+14, x+24, y+16);
-  } else if (emotion == "Sleeping") {
-    // Closed lines for sleeping
-    u8g2.drawLine(x+8, y+15, x+12, y+15);
-    u8g2.drawLine(x+24, y+15, x+28, y+15);
-  } else {
-    // Normal Eyes
-    u8g2.drawBox(x+9, y+15, 3, 3);                      
-    u8g2.drawBox(x+24, y+15, 3, 3);                     
-  }
-  // Nose & Whiskers
+  u8g2.drawFrame(x+4, y+10, 28, 16); 
+  u8g2.drawBox(x+9, y+15, 3, 3);                      
+  u8g2.drawBox(x+24, y+15, 3, 3);                     
   u8g2.drawTriangle(x+16, y+20, x+14, y+18, x+18, y+18); 
   u8g2.drawLine(x, y+18, x+4, y+18);
   u8g2.drawLine(x+32, y+18, x+36, y+18);
@@ -90,56 +167,7 @@ void drawProtocolLogo(ProtocolCategory proto) {
   u8g2.sendBuffer();
 }
 
-// 7. THE TWO NEW CORE INTERFACES
-void renderBrucegotchiScreen() {
-  u8g2.clearBuffer();
-  // Animate mood state based on pet core values
-  if (myCat.hunger > 70) myCat.mood = "Anxious";
-  else if (myCat.happiness < 30) myCat.mood = "Sleeping";
-  else myCat.mood = "Happy";
-
-  drawCatFace(5, 10, myCat.mood);
-  
-  u8g2.setFont(u8g2_font_profont10_mf);
-  u8g2.setCursor(48, 12);  u8g2.print("LVL: " + String(myCat.level));
-  u8g2.setCursor(48, 24);  u8g2.print("XP: " + String(myCat.xp) + "/" + String(myCat.nextLevelXp));
-  u8g2.setCursor(48, 36);  u8g2.print("HNG: " + String(myCat.hunger) + "%");
-  u8g2.setCursor(48, 48);  u8g2.print("HAP: " + String(myCat.happiness) + "%");
-  
-  u8g2.drawFrame(48, 52, 75, 7);
-  int xpBarWidth = map(myCat.xp, 0, myCat.nextLevelXp, 0, 73);
-  u8g2.drawBox(49, 53, xpBarWidth, 5);
-
-  u8g2.setFont(u8g2_font_profont9_mf);
-  u8g2.drawStr(0, 62, "[Hold to Exit] [Click to Feed]");
-  u8g2.sendBuffer();
-}
-
-void renderProtoPirateScreen() {
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_profont12_mf);
-  u8g2.drawStr(0, 12, "🏴‍☠️ PROTOPIRATE");
-  
-  u8g2.setFont(u8g2_font_profont10_mf);
-  u8g2.drawStr(0, 26, "Target Brand:");
-  u8g2.drawStr(10, 38, carBrands[selectedBrandIndex]);
-  
-  u8g2.setCursor(0, 50);
-  u8g2.print("Freq: " + String(selectedRfFreq, 2) + " MHz");
-  
-  if (isSniffingCar) {
-    u8g2.drawBox(90, 2, 35, 12);
-    u8g2.setDrawColor(0);
-    u8g2.drawStr(93, 11, "SNIFF");
-    u8g2.setDrawColor(1);
-    u8g2.drawStr(0, 62, ">> Listening for rolling code...");
-  } else {
-    u8g2.drawStr(0, 62, "[Click: Brand] [Hold: Sniff/Exit]");
-  }
-  u8g2.sendBuffer();
-}
-
-// 8. NAVIGATION AND LOGIC CONTROLLERS
+// 7. INPUT NAVIGATION INTERRUPT ENGINE
 void handleShortClick() {
   if (currentMode == LOGO_CYCLE) {
     activeProtocol = static_cast<ProtocolCategory>((activeProtocol + 1) % 5);
@@ -150,120 +178,82 @@ void handleShortClick() {
     if (currentMenuLine >= maxMenuLines) currentMenuLine = 0;
     updateMenuScreen();
   }
-  else if (currentMode == ACTION_RUNNING) {
-    // Reward action execution with points
-    myCat.xp += 15;
-    myCat.hunger += 5;
-    if (myCat.xp >= myCat.nextLevelXp) {
-      myCat.level++;
-      myCat.xp = 0;
-    }
+  else if (currentMode == ACTION_RUNNING || currentMode == ANALYZER_VIEW || currentMode == LOCATE_VIEW) {
+    // Session length calculator bonus tracking
+    unsigned long sessionDuration = (millis() - catOS.sessionStartTime) / 1000;
+    int bonusXp = min(20, (int)sessionDuration / 5); // Gain 1 extra XP per 5 seconds active
+    
+    awardXP(10 + bonusXp, "Attack Stop");
     currentMode = MENU_DISPLAY;
     updateMenuScreen();
-  }
-  else if (currentMode == BRUCEGOTCHI_VIEW) {
-    // Interaction: Feed cat reduces hunger, yields happiness boosts
-    if (myCat.hunger > 10) myCat.hunger -= 15;
-    if (myCat.happiness < 95) myCat.happiness += 10;
-    renderBrucegotchiScreen();
-  }
-  else if (currentMode == PROTOPIRATE_VIEW && !isSniffingCar) {
-    // Step through the 10 available car brand configurations
-    selectedBrandIndex = (selectedBrandIndex + 1) % 10;
-    
-    // Auto-switch standard regional channel spaces
-    if (selectedBrandIndex % 3 == 0) selectedRfFreq = 315.00;
-    else if (selectedBrandIndex % 3 == 1) selectedRfFreq = 433.92;
-    else selectedRfFreq = 868.35;
-    
-    renderProtoPirateScreen();
   }
 }
 
 void handleLongPress() {
   if (currentMode == LOGO_CYCLE) {
     currentMode = MENU_DISPLAY;
-    insideSubMenu = false;
-    currentSubMenuLevel = 0;
     currentMenuLine = 0;
     loadMenuContext();
   } 
   else if (currentMode == MENU_DISPLAY) {
     String selection = String(activeMenuSource[currentMenuLine]);
+    
     if (selection == "[ BACK ]") {
-      goBackALevel();
-    } else if (selection == "Tamagotchi Cat" || selection == "Brucegotchi") {
-      currentMode = BRUCEGOTCHI_VIEW;
-      renderBrucegotchiScreen();
-    } else if (selection == "ProtoPirate") {
-      currentMode = PROTOPIRATE_VIEW;
-      isSniffingCar = false;
-      renderProtoPirateScreen();
-    } else {
-      processMenuSelection(selection);
+      currentMode = LOGO_CYCLE;
+      drawProtocolLogo(activeProtocol);
+    } 
+    else if (selection == "Channel Analyzer") {
+      currentMode = ANALYZER_VIEW;
+      catOS.sessionStartTime = millis();
     }
-  }
-  else if (currentMode == BRUCEGOTCHI_VIEW) {
-    currentMode = MENU_DISPLAY;
-    updateMenuScreen();
-  }
-  else if (currentMode == PROTOPIRATE_VIEW) {
-    if (!isSniffingCar) {
-      isSniffingCar = true; // Lock radio module loop onto decoded channel profile
-      renderProtoPirateScreen();
-    } else {
-      currentMode = MENU_DISPLAY; // Secondary hold exits back upwards to RF configuration lists
-      updateMenuScreen();
+    else if (selection.endsWith("Detector") || selection.endsWith("Scanner") || selection == "Device Scout") {
+      // Divert tracking modes into radar view tools
+      currentMode = LOCATE_VIEW;
+      targetItemName = selection;
+      targetRssiSignal = -80;
+      catOS.sessionStartTime = millis();
+    }
+    else {
+      // Standard utility execution view
+      currentMode = ACTION_RUNNING;
+      catOS.sessionStartTime = millis();
+      u8g2.clearBuffer();
+      u8g2.setFont(u8g2_font_profont12_mf);
+      u8g2.drawStr(0, 15, "TACTICAL OP:");
+      u8g2.drawStr(0, 35, selection.c_str());
+      u8g2.drawStr(0, 58, "[Click to Terminate]");
+      u8g2.sendBuffer();
     }
   }
 }
 
 void loadMenuContext() {
-  if (!insideSubMenu) {
-    currentSubMenuLevel = 0;
-    switch(activeProtocol) {
-      case WIFI:      activeMenuSource = wifiMenu;      maxMenuLines = sizeof(wifiMenu)/sizeof(wifiMenu[0]); break;
-      case BLUETOOTH: activeMenuSource = bleMenu;       maxMenuLines = sizeof(bleMenu)/sizeof(bleMenu[0]); break;
-      case SUB_GHZ:   activeMenuSource = rfMenu;        maxMenuLines = sizeof(rfMenu)/sizeof(rfMenu[0]); break;
-      case INFRARED:  activeMenuSource = irMenu;        maxMenuLines = sizeof(irMenu)/sizeof(irMenu[0]); break;
-      case EXTRAS:    activeMenuSource = extrasMenu;    maxMenuLines = sizeof(extrasMenu)/sizeof(extrasMenu[0]); break;
-    }
+  switch(activeProtocol) {
+    case WIFI:      activeMenuSource = wifiMenu;      maxMenuLines = sizeof(wifiMenu)/sizeof(wifiMenu[0]); break;
+    case BLUETOOTH: activeMenuSource = bleMenu;       maxMenuLines = sizeof(bleMenu)/sizeof(bleMenu[0]); break;
+    case SUB_GHZ:   activeMenuSource = rfMenu;        maxMenuLines = sizeof(rfMenu)/sizeof(rfMenu[0]); break;
+    case INFRARED:  activeMenuSource = irMenu;        maxMenuLines = sizeof(irMenu)/sizeof(irMenu[0]); break;
+    case EXTRAS:    activeMenuSource = extrasMenu;    maxMenuLines = sizeof(extrasMenu)/sizeof(extrasMenu[0]); break;
   }
   updateMenuScreen();
 }
 
-void processMenuSelection(String item) {
-  if (item == "Games") {
-    activeMenuSource = gamesSubMenu; maxMenuLines = sizeof(gamesSubMenu)/sizeof(gamesSubMenu[0]);
-    currentMenuLine = 0; insideSubMenu = true; currentSubMenuLevel = 1;
-  } else {
-    currentMode = ACTION_RUNNING;
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_profont12_mf);
-    u8g2.drawStr(0, 15, "RUNNING TEST:");
-    u8g2.drawStr(0, 35, item.c_str());
-    u8g2.drawStr(0, 58, "[Click to Stop]");
-    u8g2.sendBuffer();
-  }
-  if (currentMode == MENU_DISPLAY) updateMenuScreen();
-}
-
-void goBackALevel() {
-  if (currentSubMenuLevel == 1) {
-    insideSubMenu = false;
-    loadMenuContext();
-  } else {
-    currentMode = LOGO_CYCLE;
-    drawProtocolLogo(activeProtocol);
-  }
-}
-
 void updateMenuScreen() {
   u8g2.clearBuffer();
+  
+  // DRAW HEADLINES: Displays Level, Progress Metrics, and Rank
+  u8g2.setFont(u8g2_font_profont9_mf);
+  u8g2.setCursor(0, 8);
+  u8g2.print("L" + String(catOS.level) + " [" + String(catOS.rankNames[catOS.rankIndex]) + "]");
+  u8g2.drawFrame(78, 2, 50, 6);
+  int xpProgress = map(catOS.xp, 0, catOS.nextLevelXp, 0, 48);
+  u8g2.drawBox(79, 3, xpProgress, 4);
+
+  // SCROLLING MENU VIEWPORT CONTAINER
   u8g2.setFont(u8g2_font_profont10_mf);
-  int startEntry = max(0, currentMenuLine - 2);
+  int startEntry = max(0, currentMenuLine - 1);
   int endEntry = min(maxMenuLines, startEntry + 4);
-  int textY = 12;
+  int textY = 23;
   
   for (int i = startEntry; i < endEntry; i++) {
     if (i == currentMenuLine) {
@@ -281,4 +271,16 @@ void updateMenuScreen() {
 
 void setup() {
   u8g2.begin();
-Use code with caution.
+  bootTimer = millis();
+  button.setLongPressIntervalMs(1000);
+  button.attachClick(handleShortClick);
+  button.attachLongPressStop(handleLongPress);
+}
+
+void loop() {
+  button.tick();
+  
+  // Real-time animation updates for tracking components
+  if (currentMode == ANALYZER_VIEW && millis() % 200 == 0) {
+    drawChannelAnalyzer();
+  }
